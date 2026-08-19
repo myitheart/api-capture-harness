@@ -3,8 +3,8 @@ import type {
   SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, workspaceLabel, relativeTime,
-  UNGROUPED_KEY, UNGROUPED_LABEL,
+  ANALYSIS_GROUP_KEY, deriveAnalysisGroup, deriveFlat, deriveGroups, deriveSearchResults,
+  workspaceLabel, relativeTime, UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -32,6 +32,30 @@ const noArchive: readonly SessionId[] = []
 const archived = (...ids: string[]): readonly SessionId[] => ids.map(sid)
 
 describe('deriveGroups', () => {
+  it('keeps project-free analysis sessions in the fixed analysis group and out of Ungrouped', () => {
+    const analysis = {
+      ...summary('analysis', 20, '/managed/analysis'), agentPreset: 'api-capture-analysis',
+    }
+    const loose = summary('loose', 10, '/other')
+    const sessions = { ...list(analysis, loose), current: analysis.id }
+    const analysisGroup = deriveAnalysisGroup(sessions, [], noArchive, true)
+    expect(analysisGroup).toMatchObject({
+      key: ANALYSIS_GROUP_KEY, analysis: true, expanded: true, containsCurrent: true,
+    })
+    expect(analysisGroup.sessions).toEqual([
+      expect.objectContaining({ id: analysis.id, analysis: true }),
+    ])
+    const ordinary = deriveGroups(sessions, [], noArchive, view([UNGROUPED_KEY]))
+    expect(ordinary).toHaveLength(1)
+    expect(ordinary[0]!.sessions.map(node => node.id)).toEqual([loose.id])
+  })
+
+  it('keeps the analysis pseudo-group available when no project or session exists', () => {
+    expect(deriveAnalysisGroup(list(), [], noArchive, true)).toMatchObject({
+      key: ANALYSIS_GROUP_KEY, sessionCount: 0, sessions: [], expanded: true,
+    })
+  })
+
   it('keeps Host Workspace and sessionIds order without Client recency sorting', () => {
     const sessions = list(summary('newer', 20), summary('older', 10))
     const workspaces = [workspace('first', ['older', 'newer']), workspace('empty', [])]

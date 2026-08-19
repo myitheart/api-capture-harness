@@ -71,6 +71,28 @@ export function apply(ctx: ClientContext): void {
     // Explicit group actions keep their target; unscoped New Session inherits
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { ctx.workspaces.startSession(workspaceId) },
+    startAnalysisSession: () => {
+      void fetch('/api-capture/chat-drafts/config').then(async (response) => {
+        if (!response.ok) throw new Error(`analysis configuration request failed with HTTP ${String(response.status)}`)
+        const target = await response.json() as { cwd?: unknown; agentPreset?: unknown }
+        if (typeof target.cwd !== 'string' || target.cwd === ''
+          || target.agentPreset !== 'api-capture-analysis') {
+          throw new Error('analysis configuration response is invalid')
+        }
+        const sessionId = await ctx.sessions.create({
+          cwd: target.cwd,
+          agentPreset: target.agentPreset,
+        })
+        const session = ctx.sessions.binding(sessionId)?.session
+        if (session === undefined) throw new Error(`analysis session "${sessionId}" is unavailable`)
+        const permission = await session.command('/permission read-only')
+        if (!permission.ok) throw new Error(permission.error.message)
+        if (!permission.value.matched) throw new Error('read-only permission command is unavailable')
+        ctx.sessions.open(sessionId)
+      }).catch((reason: unknown) => {
+        console.error('new analysis session failed:', reason)
+      })
+    },
     open: (sessionId) => { ctx.sessions.open(sessionId) },
     searchSessions,
     searchResultLimit: ctx.sessions.searchResultLimit,

@@ -26,6 +26,7 @@ All keys are optional; the defaults are the shipped read caps.
 | `readMaxLineLength` | `2000` | Characters kept per line before truncation (the suffix names the cap). |
 | `readMaxBytes` | `51200` | Byte cap on one `read` call's selected lines; overflow ends the window with a "capped" footer. |
 | `readStreamMinSize` | `10485760` | Files at or above this size (or with unknown size) stream instead of loading whole into memory. |
+| `enabledTools` | `['read', 'read_image', 'write', 'edit']` | Non-empty list of tool names registered by this plugin instance. Analysis presets can expose only `read` and `read_image` without changing the default deployment. |
 
 ## Tools (schemas per [the filesystem tool schemas Agent Note](../../../.agents/notes/implemented/feature/2026-06-17-filesystem-tool-schemas.md))
 
@@ -67,7 +68,7 @@ The package root exports only the Cordis plugin contract (`name`, `inject`, `Con
 
 #### What the model sees
 
-Every request in this plugin's registration scope receives the independently registered read, write, and edit guidance below. Scoped tool restrictions can hide schemas without removing these sections.
+Every request in this plugin's registration scope receives guidance for the tools enabled on that instance. Scoped tool restrictions can hide schemas without removing guidance already registered by the instance.
 
 ##### Read guidance
 

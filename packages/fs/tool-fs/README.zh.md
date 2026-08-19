@@ -26,6 +26,7 @@ await ctx.plugin(ToolFs)                                  // this package — re
 | `readMaxLineLength` | `2000` | 每行截断前保留的字符数（后缀会说明上限）。 |
 | `readMaxBytes` | `51200` | 一次 `read` 调用所选行的字节上限；溢出时以「已达上限」footer 结束窗口。 |
 | `readStreamMinSize` | `10485760` | 大于等于该大小或大小未知的文件采用流式读取，而不是整体加载到内存。 |
+| `enabledTools` | `['read', 'read_image', 'write', 'edit']` | 当前插件实例注册的非空工具名称列表。分析 Preset 可以只暴露 `read` 与 `read_image`，且不改变默认部署。 |
 
 ## 工具（schema 见[文件系统工具 schema Agent Note](../../../.agents/notes/implemented/feature/2026-06-17-filesystem-tool-schemas.md)）
 
@@ -67,7 +68,7 @@ await ctx.plugin(ToolFs)                                  // this package — re
 
 #### 模型看到的内容
 
-该插件注册作用域内的每个请求都会收到下方独立注册的 read、write 与 edit 指导。作用域工具限制可以隐藏 schema，而不移除这些段。
+该插件注册作用域内的每个请求都会收到当前实例已启用工具的指导。作用域工具限制可以隐藏 schema，而不会移除实例已经注册的指导。
 
 ##### Read 指导
 

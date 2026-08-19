@@ -16,6 +16,7 @@ export interface SessionsPortSummary {
   /** Empty-log bit (blank sessions are reused by New Session instead of minting another). */
   blank: boolean
   cwd?: string
+  agentPreset?: string
   updatedAt: number
 }
 
@@ -33,10 +34,10 @@ export interface SessionsPort {
   readonly list: ObservableSnapshot<SessionsPortList>
   /**
    * Create a session on the host.
-   * @param opts - target workspace.
+   * @param opts - target workspace or loose cwd with an optional preset.
    * @returns the new session id.
    */
-  create(opts: { workspaceId: WorkspaceId }): Promise<SessionId>
+  create(opts: { workspaceId?: WorkspaceId; cwd?: string; agentPreset?: string }): Promise<SessionId>
   /**
    * Select a session as current.
    * @param id - session id (must exist in the list store).

@@ -514,6 +514,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes.',
   },
   {
+    key: 'apiCaptureEvidence',
+    pkg: 'api-capture-evidence',
+    title: 'Immutable local evidence package storage',
+    mode: 'core',
+    note: 'Owns the loopback evidence-package lifecycle, immutable publication, integrity manifest, listing, deletion, and native directory reveal operations used by API Capture product and developer flows.',
+  },
+  {
     key: 'clientModules',
     pkg: 'modules',
     title: 'Client plugin graph host',

@@ -168,6 +168,27 @@
     - id: client-runtime
       name: '@deepseek-ai/dsh-client-runtime'
 
+    # Immutable local evidence packages are stored outside the user's code
+    # repository. Limits stay deployment-owned instead of living in the client.
+    - id: api-capture-evidence
+      name: '@deepseek-ai/dsh-host-api-capture-evidence'
+      config:
+        root: !!js process.env.API_CAPTURE_EVIDENCE_HOME ?? dshHomePath('api-capture-evidence')
+        maxPackageBytes: 1073741824
+        maxFileBytes: 209715200
+        maxFiles: 5000
+        maxMetadataBytes: 4194304
+        stagingTtlMs: 86400000
+
+    # Loopback bridge used by API Capture Assistant. It only fills the native
+    # composer draft; the user remains responsible for reviewing and sending.
+    - id: api-capture-draft
+      name: '@deepseek-ai/dsh-client-api-capture-draft'
+      config:
+        maxBodyBytes: 8388608
+        draftTtlMs: 1800000
+        analysisRoot: !!js process.env.API_CAPTURE_ANALYSIS_HOME ?? dshHomePath('api-capture-analysis')
+
     - id: cordis-client-runner
       name: '@deepseek-ai/dsh-cordis-client-runner'
 

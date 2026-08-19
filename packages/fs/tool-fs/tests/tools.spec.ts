@@ -98,13 +98,13 @@ class FakeFs extends FileSystem {
   }
 }
 
-async function setup() {
+async function setup(config: ToolFs.Config = {}) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(FakeFs)
   await ctx.plugin(FsPolicy)
-  await ctx.plugin(ToolFs)
+  await ctx.plugin(ToolFs, config)
   const fs = ctx.fs as FakeFs
   return { ctx, fs }
 }
@@ -154,6 +154,20 @@ describe('registration', () => {
   it('registers read, write, and edit', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['edit', 'read', 'write'])
+  })
+
+  it('can expose a read-only subset without registering mutation tools', async () => {
+    const { ctx } = await setup({ enabledTools: ['read', 'read_image'] })
+    expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['read'])
+    const prompt = renderPrompt(await ctx.systemPrompt.assemble())
+    expect(prompt).toContain('Use the read tool')
+    expect(prompt).not.toContain('Use the write tool')
+    expect(prompt).not.toContain('Use the edit tool')
+  })
+
+  it('rejects empty or duplicate enabled tool lists', async () => {
+    await expect(setup({ enabledTools: [] })).rejects.toThrow('must include at least one tool')
+    await expect(setup({ enabledTools: ['read', 'read'] })).rejects.toThrow('must not contain duplicates')
   })
 
   it('declares read parallel-safe while write/edit remain exclusive', async () => {

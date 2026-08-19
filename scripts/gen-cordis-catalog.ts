@@ -54,6 +54,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   agentDefaultModel: 'core.md',
   agentPresets: 'core.md',
   agents: 'core.md',
+  apiCaptureEvidence: 'web-server.md',
   apiProxy: 'typert.md',
   approval: 'approval.md',
   attachments: 'attachment.md',

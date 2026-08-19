@@ -20,7 +20,10 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import type { SessionNode, SessionOrderBy } from './tree.ts'
-import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
+import {
+  ANALYSIS_AGENT_PRESET, ANALYSIS_GROUP_KEY, deriveAnalysisGroup,
+  deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY,
+} from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
@@ -215,7 +218,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
-  'useSessions' | 'startSession' | 'open' | 'forkSession'
+  'useSessions' | 'startSession' | 'startAnalysisSession' | 'open' | 'forkSession'
   | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
 > & {
   workspaces: readonly WorkspaceView[]
@@ -247,7 +250,7 @@ type SessionTreeProps = Pick<
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
-  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
+  useSessions, startSession, startAnalysisSession, open, forkSession, workspaces, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
@@ -267,18 +270,29 @@ function SessionTree({
   const currentGroup = current === undefined
     ? undefined
     : (workspaces.find(w => w.sessionIds.includes(current))?.workspaceId as string | undefined)
-      ?? UNGROUPED_KEY
+      ?? (list.byId[current]?.agentPreset === ANALYSIS_AGENT_PRESET ? ANALYSIS_GROUP_KEY : UNGROUPED_KEY)
   useEffect(() => {
     if (current === undefined || currentGroup === undefined || Object.hasOwn(groupExpansion, currentGroup)) return
     setGroupExpanded(currentGroup, true)
   }, [current, currentGroup, setGroupExpanded, groupExpansion])
   const expandedGroups = useMemo(
-    () => Object.entries(groupExpansion).filter(([, expanded]) => expanded).map(([key]) => key),
+    () => [
+      ...(groupExpansion[ANALYSIS_GROUP_KEY] === false ? [] : [ANALYSIS_GROUP_KEY]),
+      ...Object.entries(groupExpansion)
+        .filter(([key, expanded]) => key !== ANALYSIS_GROUP_KEY && expanded)
+        .map(([key]) => key),
+    ],
     [groupExpansion],
   )
+  const analysisSessionIds = useMemo(() => {
+    const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
+    return list.ids.filter(id => list.byId[id]?.agentPreset === ANALYSIS_AGENT_PRESET && !accounted.has(id))
+  }, [list, workspaces])
   const ungroupedSessionIds = useMemo(() => {
     const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
-    return list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))
+    return list.ids.filter(id => list.byId[id] !== undefined
+      && list.byId[id]?.agentPreset !== ANALYSIS_AGENT_PRESET
+      && !accounted.has(id))
   }, [list, workspaces])
   useEffect(() => {
     if (list.phase !== 'ready') return
@@ -289,6 +303,7 @@ function SessionTree({
         key: workspace.workspaceId as string,
         sessionIds: workspace.sessionIds.filter(id => list.byId[id] !== undefined),
       })),
+      { key: ANALYSIS_GROUP_KEY, sessionIds: analysisSessionIds },
       { key: UNGROUPED_KEY, sessionIds: ungroupedSessionIds },
     ]
     for (const { key, sessionIds } of accounts) {
@@ -306,7 +321,16 @@ function SessionTree({
         syncSessionOrderAccount(key, next.order.map(id => id as string), next.updatedAt)
       }
     }
-  }, [list, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
+  }, [
+    analysisSessionIds,
+    list,
+    orderBy,
+    sessionOrderByAccount,
+    sessionUpdatedAtByAccount,
+    syncSessionOrderAccount,
+    ungroupedSessionIds,
+    workspaces,
+  ])
   const orderedWorkspaces = useMemo(() => {
     return workspaces.map((workspace) => {
       const stored = sessionOrderByAccount[workspace.workspaceId as string]
@@ -318,13 +342,26 @@ function SessionTree({
     () => reconciledSessionOrder(ungroupedSessionIds, sessionOrderByAccount[UNGROUPED_KEY]),
     [sessionOrderByAccount, ungroupedSessionIds],
   )
+  const orderedAnalysisSessionIds = useMemo(
+    () => reconciledSessionOrder(analysisSessionIds, sessionOrderByAccount[ANALYSIS_GROUP_KEY]),
+    [analysisSessionIds, sessionOrderByAccount],
+  )
   const groups = useMemo(
-    () => deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
-      expandedGroups,
-      ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
-        ? {}
-        : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }),
+    () => [
+      deriveAnalysisGroup(
+        list,
+        orderedWorkspaces,
+        archivedSessionIds,
+        expandedGroups.includes(ANALYSIS_GROUP_KEY),
+        sessionOrderByAccount[ANALYSIS_GROUP_KEY],
+      ),
+      ...deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
+        expandedGroups,
+        ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
+          ? {}
+          : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
+      }),
+    ],
     [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount],
   )
   const now = Date.now()
@@ -345,13 +382,16 @@ function SessionTree({
     if (sourceIndex !== -1 && (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1)) return
     const accountSessionIds = activeDrag.accountKey === UNGROUPED_KEY
       ? orderedUngroupedSessionIds
-      : orderedWorkspaces.find(workspace => workspace.workspaceId === activeDrag.accountKey)?.sessionIds
+      : activeDrag.accountKey === ANALYSIS_GROUP_KEY
+        ? orderedAnalysisSessionIds
+        : orderedWorkspaces.find(workspace => workspace.workspaceId === activeDrag.accountKey)?.sessionIds
     if (accountSessionIds === undefined) return
     const nextOrder = accountSessionIds.filter(id => id !== activeDrag.sessionId)
     const insertAt = anchor === undefined ? nextOrder.length : nextOrder.indexOf(anchor)
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
     setSessionOrder(activeDrag.accountKey, nextOrder.map(id => id as string))
-    if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY) return
+    if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY
+      || activeDrag.accountKey === ANALYSIS_GROUP_KEY) return
     insertSessionBefore(activeDrag.accountKey as WorkspaceId, activeDrag.sessionId, anchor).catch((reason: unknown) => {
       console.warn('session reorder rejected:', reason)
     })
@@ -376,8 +416,9 @@ function SessionTree({
       console.warn('workspace reorder rejected:', reason)
     })
   }
-  const workspaceDropAtListStart = groups[0]?.workspaceId !== undefined
-    && workspaceDrag?.over?.id === groups[0].workspaceId
+  const firstWorkspaceGroup = groups.find(group => group.workspaceId !== undefined)
+  const workspaceDropAtListStart = firstWorkspaceGroup?.workspaceId !== undefined
+    && workspaceDrag?.over?.id === firstWorkspaceGroup.workspaceId
     && workspaceDrag.over.half === 'before'
 
   return (
@@ -388,7 +429,7 @@ function SessionTree({
         role="tree"
         aria-label={t('section.sessions')}
       >
-        {groups.length === 0 && (
+        {groups.every(group => group.sessionCount === 0) && (
           <div className={css.empty}>{t('empty.none')}</div>
         )}
         {groups.map((group) => {
@@ -458,7 +499,10 @@ function SessionTree({
                   setGroupExpanded(group.key, !group.expanded)
                 }}
                 onCreate={() => {
-                  if (group.workspaceId !== undefined) {
+                  if (group.analysis === true) {
+                    setGroupExpanded(group.key, true)
+                    startAnalysisSession()
+                  } else if (group.workspaceId !== undefined) {
                     setGroupExpanded(group.key, true)
                     startSession(group.workspaceId)
                   }
@@ -746,6 +790,7 @@ export function WorkspaceBrowser({
   useStore,
   actions,
   startSession,
+  startAnalysisSession,
   open,
   renameSession,
   forkSession,
@@ -775,6 +820,7 @@ export function WorkspaceBrowser({
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
+      ANALYSIS_GROUP_KEY,
       UNGROUPED_KEY,
       FLAT_SESSION_ORDER_KEY,
       ...workspaces.map(workspace => workspace.workspaceId as string),
@@ -1148,6 +1194,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={actions.setSessionOrder}
                 archivedSessionIds={archivedSessionIds}
                 startSession={startSession}
+                startAnalysisSession={startAnalysisSession}
                 open={open}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}

@@ -2,6 +2,14 @@
 
 DeepSeek Harness is a plugin-based agent harness on vendored Cordis: **everything is a plugin**. Read [docs/architecture.md](docs/architecture.md) before changing `packages/`; follow [docs/AGENTS.md](docs/AGENTS.md) for documentation.
 
+## API Capture Assistant repository family
+
+This fork is also the runtime member of a three-repository product family: sibling `api-capture-assistant-extensions` owns capture UI and product/developer Prompt construction; sibling `api-capture-assistant` owns the native Harness launcher and portable release assembly; this repository owns the native Web Prompt draft bridge, platform runtime integration, and Harness distribution build.
+
+If the project family moves to another parent directory, resolve these three repository names as siblings of the current repository instead of relying on hard-coded absolute paths.
+
+For API Capture tasks, do not limit discovery to this repository. Inspect the owning sibling repositories when behavior crosses Prompt construction, the draft HTTP API, native sessions, build metadata, or packaging. Keep all three as independent Git histories and report branch, status, tests, commits, and remotes separately. Preserve dirty files; never recreate a missing sibling, commit, or push unless explicitly requested. The primary integration fills the native composer with an editable Prompt and never submits it; Workspace, sessions, models, permissions, tools, and conversation stay native Harness behavior. Shared compatibility points include Bridge protocol version, assistant `harness.lock.json`, and this Fork's `harness-build.json`.
+
 ## Pre-release stance: foundation over blast radius
 
 **Remove this section at the first tagged release.** With no external consumers, prefer the correct foundation over compatibility shims: rename or repackage freely and update every reference together. Backends reject old on-disk formats. SQLite uses monotonic `SCHEMA_VERSION`; `dsh-session` keeps `SESSION_FORMAT_VERSION` at `0` with no compatibility promise.

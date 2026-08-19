@@ -20,6 +20,11 @@ packages:
   # closure is what the exe bundles and what the Python runtime distributes.
   - python/sdk-runtime
 
+# Build scripts own dependency installation explicitly. In particular, the
+# The API Capture native Web production deploy must not trigger an implicit workspace
+# prune before the next test command.
+verifyDepsBeforeRun: false
+
 # Vendored framework packages keep their upstream semver ranges, while local
 # builds must resolve those matching names to this workspace's pinned sources.
 linkWorkspacePackages: true

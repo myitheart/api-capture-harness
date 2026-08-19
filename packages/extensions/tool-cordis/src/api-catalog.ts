@@ -305,6 +305,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'apiCaptureEvidence',
+    summary: 'Immutable evidence package storage and loopback HTTP provider.',
+    description: 'Immutable evidence package storage and loopback HTTP provider.',
+    methods: [
+      {
+        signature: 'readonly protocolVersion: typeof EVIDENCE_PROTOCOL_VERSION = EVIDENCE_PROTOCOL_VERSION',
+        description: 'Evidence-package wire protocol implemented by this service.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'apiProxy',
     summary: 'Root interface of the unified API.',
     description: 'Root interface of the unified API. New client-request domain = one new file pair + one field here + one map row.',

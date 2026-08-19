@@ -9,7 +9,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
-import { UNGROUPED_KEY } from '../src/client/tree.ts'
+import { ANALYSIS_GROUP_KEY, UNGROUPED_KEY } from '../src/client/tree.ts'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -58,6 +58,11 @@ function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setDat
   return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn() }
 }
 
+/** Existing browser assertions target ordinary Workspace/Session rows. */
+function ordinaryTreeItems(): HTMLElement[] {
+  return screen.getAllByRole('treeitem').filter(row => row.textContent?.includes('现场分析') !== true)
+}
+
 function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const store = createWorkspaceViewStore().create()
   const props: WorkspaceBrowserProps = {
@@ -68,6 +73,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     startSession: vi.fn(),
+    startAnalysisSession: vi.fn(),
     open: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
@@ -95,6 +101,23 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('renders the fixed analysis group and starts a blank analysis session from its native plus action', () => {
+    const startAnalysisSession = vi.fn()
+    const analysis = summary('analysis-blank', 1, {
+      blank: true,
+      cwd: 'C:/managed/analysis',
+      agentPreset: 'api-capture-analysis',
+    })
+    mount({
+      useSessions: hook(sessionState([analysis], { current: analysis.id })),
+      startAnalysisSession,
+    })
+    expect(screen.getByText('现场分析')).toBeTruthy()
+    expect(screen.getByText('新现场分析')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '在“现场分析”中新建会话' }))
+    expect(startAnalysisSession).toHaveBeenCalledTimes(1)
+  })
+
   it('prunes deleted Workspace view state only after the Workspace baseline is ready', async () => {
     const pending = {
       ...workspaceState([]),
@@ -112,8 +135,12 @@ describe('WorkspaceBrowser', () => {
     rerender(b, { useWorkspaces: hook(workspaceState([])) })
     await waitFor(() => {
       expect(b.store.getSnapshot().groupExpansion).toEqual({})
-      expect(b.store.getSnapshot().sessionOrderByAccount).toEqual({ [UNGROUPED_KEY]: [] })
-      expect(b.store.getSnapshot().sessionUpdatedAtByAccount).toEqual({ [UNGROUPED_KEY]: {} })
+      expect(b.store.getSnapshot().sessionOrderByAccount).toEqual({
+        [ANALYSIS_GROUP_KEY]: [], [UNGROUPED_KEY]: [],
+      })
+      expect(b.store.getSnapshot().sessionUpdatedAtByAccount).toEqual({
+        [ANALYSIS_GROUP_KEY]: {}, [UNGROUPED_KEY]: {},
+      })
     })
   })
 
@@ -205,7 +232,7 @@ describe('WorkspaceBrowser', () => {
     const restored = mount({ useSessions: hook(sessions), useWorkspaces: hook(workspaces) })
     expect(restored.store.getSnapshot().groupBy).toBe('flat')
     expect(restored.store.getSnapshot().orderBy).toBe('manual')
-    expect(screen.getAllByRole('treeitem').map(row => row.textContent)).toEqual([
+    expect(ordinaryTreeItems().map(row => row.textContent)).toEqual([
       expect.stringContaining('two'),
       expect.stringContaining('three'),
       expect.stringContaining('one'),
@@ -261,12 +288,12 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
-      const rows = screen.getAllByRole('treeitem').slice(1)
+      const rows = ordinaryTreeItems().slice(1)
       expect(rows[0]?.textContent).toContain('one')
       expect(rows[1]?.textContent).toContain('two')
     })
 
-    const [one, two] = screen.getAllByRole('treeitem').slice(1) as [HTMLElement, HTMLElement]
+    const [one, two] = ordinaryTreeItems().slice(1) as [HTMLElement, HTMLElement]
     two.getBoundingClientRect = () => ({
       top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
     })
@@ -276,7 +303,7 @@ describe('WorkspaceBrowser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
-    expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
+    expect(ordinaryTreeItems().slice(1)[0]?.textContent).toContain('two')
 
     // User activity updates the timestamp baseline in Manual mode without
     // changing the shared visual order.
@@ -286,14 +313,14 @@ describe('WorkspaceBrowser', () => {
       expect(b.store.getSnapshot().sessionUpdatedAtByAccount.alpha).toEqual({ one: 4, two: 2 })
     })
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['two', 'one'])
-    expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
+    expect(ordinaryTreeItems().slice(1)[0]?.textContent).toContain('two')
 
     // Entering Last updated performs one complete recency sort.
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['one', 'two'])
-      expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('one')
+      expect(ordinaryTreeItems().slice(1)[0]?.textContent).toContain('one')
     })
 
     // A later user activity timestamp promotes that Session once while the
@@ -302,7 +329,7 @@ describe('WorkspaceBrowser', () => {
     rerender(b, { useSessions: hook(promoted) })
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['two', 'one'])
-      expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
+      expect(ordinaryTreeItems().slice(1)[0]?.textContent).toContain('two')
     })
 
     b.view.unmount()
@@ -311,7 +338,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['two', 'one'])])),
     })
     expect(restored.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['two', 'one'])
-    expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
+    expect(ordinaryTreeItems().slice(1)[0]?.textContent).toContain('two')
   })
 
   it('archives a session from the row menu and hides archived rows in both modes', async () => {
@@ -811,7 +838,7 @@ describe('WorkspaceBrowser', () => {
       insertSessionBefore,
     })
     fireEvent.click(screen.getByText('alpha'))
-    const rows = screen.getAllByRole('treeitem').slice(1) // drop the group header
+    const rows = ordinaryTreeItems().slice(1) // drop the group header
     const [one, , three] = rows as [HTMLElement, HTMLElement, HTMLElement]
     three.getBoundingClientRect = () => ({
       top: 200, bottom: 234, left: 0, right: 200, width: 200, height: 34, x: 0, y: 200, toJSON: () => ({}),
@@ -879,7 +906,7 @@ describe('WorkspaceBrowser', () => {
       insertSessionBefore,
     })
     expect(restored.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['two', 'three', 'one'])
-    expect(screen.getAllByRole('treeitem').slice(1).map(row => row.textContent)).toEqual([
+    expect(ordinaryTreeItems().slice(1).map(row => row.textContent)).toEqual([
       expect.stringContaining('two'),
       expect.stringContaining('three'),
       expect.stringContaining('one'),
@@ -917,7 +944,7 @@ describe('WorkspaceBrowser', () => {
       insertSessionBefore,
     })
     fireEvent.click(screen.getByText('alpha'))
-    const [one, two] = screen.getAllByRole('treeitem').slice(1) as [HTMLElement, HTMLElement]
+    const [one, two] = ordinaryTreeItems().slice(1) as [HTMLElement, HTMLElement]
     two.getBoundingClientRect = () => ({
       top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
     })
@@ -943,7 +970,7 @@ describe('WorkspaceBrowser', () => {
       insertSessionBefore,
     })
     fireEvent.click(screen.getByText('alpha'))
-    const [one, two] = screen.getAllByRole('treeitem').slice(1) as [HTMLElement, HTMLElement]
+    const [one, two] = ordinaryTreeItems().slice(1) as [HTMLElement, HTMLElement]
     two.getBoundingClientRect = () => ({
       top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
     })
@@ -968,7 +995,7 @@ describe('WorkspaceBrowser', () => {
         insertSessionBefore,
       })
       fireEvent.click(screen.getByText('alpha'))
-      const [one, two] = screen.getAllByRole('treeitem').slice(1) as [HTMLElement, HTMLElement]
+      const [one, two] = ordinaryTreeItems().slice(1) as [HTMLElement, HTMLElement]
       two.getBoundingClientRect = () => ({
         top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
       })

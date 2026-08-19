@@ -184,10 +184,12 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
+    method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
       | 'clear' | 'search' | 'fork'
     args: unknown[]
   }[] = []
+
+  private createdCount = 0
 
   /** The wire schema's `session.search` result bound (production parity). */
   readonly searchResultLimit = SESSION_SEARCH_RESULT_LIMIT
@@ -410,6 +412,20 @@ export class TestSessions implements ISessions {
     this.list.update((draft) => {
       draft.current = id
       draft.currentAddress = undefined
+    })
+  }
+
+  /** Create a blank fixture session through the same feature-facing seam as production. */
+  async create(opts: Parameters<ISessions['create']>[0] = {}): Promise<SessionId> {
+    this.calls.push({ method: 'create', args: [opts] })
+    const id = opts.sessionId ?? (`test-created-${String(++this.createdCount)}` as SessionId)
+    return this.add({
+      id,
+      summary: {
+        blank: true,
+        ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+        ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
+      },
     })
   }
 

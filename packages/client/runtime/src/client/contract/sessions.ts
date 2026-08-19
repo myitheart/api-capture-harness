@@ -35,6 +35,18 @@ export interface ISessions {
    */
   readonly searchResultLimit: number
   /**
+   * Create a session directly against a Workspace or cwd. Feature bridges use
+   * this only when the user explicitly requested a new native Session.
+   * @param opts - target location, optional preallocated id and agent preset.
+   * @returns the new session id after it is synchronously addressable.
+   */
+  create(opts?: {
+    workspaceId?: import('@deepseek-ai/dsh-api-remotes/client').WorkspaceId
+    cwd?: string
+    sessionId?: SessionId
+    agentPreset?: string
+  }): Promise<SessionId>
+  /**
    * Select a session as current.
    * @param id - session id (must exist in the list; unknown ids fail loud).
    */

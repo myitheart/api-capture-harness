@@ -12,6 +12,12 @@ import {
 /** Group key for Sessions outside every Workspace. */
 export const UNGROUPED_KEY = ''
 
+/** Browser-local pseudo-group for project-free API Capture analysis Sessions. */
+export const ANALYSIS_GROUP_KEY = '__api_capture_analysis__'
+
+/** Agent preset persisted on every project-free API Capture analysis Session. */
+export const ANALYSIS_AGENT_PRESET = 'api-capture-analysis'
+
 /** Display label for the ungrouped bucket row. */
 export const UNGROUPED_LABEL = 'Ungrouped'
 
@@ -22,6 +28,8 @@ export interface SessionNode {
   title: string
   /** The provisional blank session (renderer shows the localized New Session title). */
   blank: boolean
+  /** True for project-free API Capture analysis Sessions. */
+  analysis?: true
   /** The runtime Session list reports an interaction awaiting this user. */
   pendingInteraction?: PendingInteractionStatus
   running: boolean
@@ -39,6 +47,8 @@ export type SessionOrderBy = 'manual' | 'updated'
 export interface GroupNode {
   /** Group key: the workspace id or {@link UNGROUPED_KEY}. */
   key: string
+  /** Fixed project-free analysis pseudo-group (not a real Workspace). */
+  analysis?: true
   /** Backing Workspace id; absent only for the ungrouped bucket. */
   workspaceId: WorkspaceId | undefined
   cwd: string | undefined
@@ -121,6 +131,10 @@ function sessionVisible(session: SessionSummary, current: SessionId | undefined,
     && (!session.blank || session.id === current)
 }
 
+function analysisSession(session: SessionSummary): boolean {
+  return session.agentPreset === ANALYSIS_AGENT_PRESET
+}
+
 /**
  * A blank session is the selected Workspace's provisional New Session row;
  * its canonical title never enters search (blank rows are query-excluded)
@@ -196,7 +210,8 @@ function groupByWorkspace(
   const stray = list.ids
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && sessionVisible(s, list.current, archived))
+      s !== undefined && !accounted.has(s.id) && !analysisSession(s)
+      && sessionVisible(s, list.current, archived))
   if (stray.length > 0) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
@@ -219,11 +234,55 @@ function sessionNode(
     id: s.id,
     title: sessionTitle(s),
     blank: s.blank,
+    ...(analysisSession(s) ? { analysis: true as const } : {}),
     running: s.running,
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     updatedAt: s.updatedAt,
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
+  }
+}
+
+
+/**
+ * Derive the fixed project-free analysis pseudo-group. Real Workspace
+ * accounting wins defensively, so a malformed attached Session is never
+ * shown twice.
+ * @param list - Current projected Session summaries.
+ * @param workspaces - Real Host Workspace accounting.
+ * @param archivedSessionIds - Sessions hidden by archive state.
+ * @param expanded - Whether the fixed group exposes its rows.
+ * @param storedOrder - Optional browser-persisted analysis Session order.
+ * @returns Fixed analysis group projection.
+ */
+export function deriveAnalysisGroup(
+  list: SessionListState,
+  workspaces: readonly WorkspaceView[],
+  archivedSessionIds: readonly SessionId[],
+  expanded: boolean,
+  storedOrder?: readonly string[],
+): GroupNode {
+  const archived = new Set(archivedSessionIds)
+  const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
+  const members = list.ids
+    .map(id => list.byId[id])
+    .filter((session): session is SessionSummary => session !== undefined
+      && !accounted.has(session.id)
+      && analysisSession(session)
+      && sessionVisible(session, list.current, archived))
+  const ordered = storedOrder === undefined ? [...members].sort(byRecency) : orderedUngrouped(members, storedOrder)
+  const descendants = indexSubagentDescendants(list.byId)
+  return {
+    key: ANALYSIS_GROUP_KEY,
+    analysis: true,
+    workspaceId: undefined,
+    cwd: undefined,
+    createdAt: undefined,
+    label: 'API Capture Analysis',
+    sessionCount: ordered.length,
+    expanded,
+    containsCurrent: list.current !== undefined && ordered.some(session => session.id === list.current),
+    sessions: expanded ? ordered.map(session => sessionNode(session, descendants)) : [],
   }
 }
 
@@ -253,7 +312,7 @@ export function deriveGroups(
   const currentGroup = list.current === undefined
     ? undefined
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
-        ?? UNGROUPED_KEY
+        ?? (list.byId[list.current]?.agentPreset === ANALYSIS_AGENT_PRESET ? undefined : UNGROUPED_KEY)
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
     const expanded = expandedGroups.has(g.key)

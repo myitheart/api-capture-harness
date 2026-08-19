@@ -494,6 +494,22 @@ describe('create', () => {
     expect(b.svc.scope(born)).toBeDefined()
   })
 
+  it('forwards and projects an explicitly selected agent preset for loose sessions', async () => {
+    const b = bench()
+    b.api.onCreate = () => Promise.resolve(ok({
+      sessionId: sid('analysis'), agentPreset: 'api-capture-analysis',
+    }))
+    const created = await b.svc.create({
+      cwd: '/managed/analysis', agentPreset: 'api-capture-analysis',
+    })
+    expect(b.api.callsOf('session.create')).toEqual([{
+      cwd: '/managed/analysis', agentPreset: 'api-capture-analysis',
+    }])
+    expect(b.svc.list.getSnapshot().byId[created]).toMatchObject({
+      cwd: '/managed/analysis', agentPreset: 'api-capture-analysis', blank: true,
+    })
+  })
+
   it('lists the published id after Workspace attachment fails (publication precedes attachment)', async () => {
     const b = bench()
     b.api.onCreate = () => Promise.resolve({

@@ -134,4 +134,28 @@ describe('shipped agent presets gate both shell tools by platform', () => {
       )), `${id} must be absent from minimal`).toBe(false)
     }
   })
+
+  it('api-capture-analysis exposes only read-only evidence tools and conversation helpers', () => {
+    const entries: unknown = yaml.load(
+      readFileSync(join(presetRoot, 'api-capture-analysis', 'agent.cordis.yml'), 'utf8'),
+      { schema: entryListSchema },
+    )
+    if (!Array.isArray(entries)) throw new TypeError('api-capture-analysis preset must parse to an entry array')
+    const byId = new Map(entries.map((entry) => {
+      if (typeof entry !== 'object' || entry === null) throw new TypeError('preset entries must be objects')
+      const row = entry as Record<string, unknown>
+      return [String(row.id), row]
+    }))
+    expect([...byId.keys()].sort()).toEqual([
+      'compaction',
+      'persona',
+      'tool-ask-user',
+      'tool-fs',
+      'tool-web',
+    ])
+    expect(byId.get('tool-fs')?.config).toMatchObject({ enabledTools: ['read', 'read_image'] })
+    for (const id of ['tool-bash', 'tool-pwsh', 'tool-jobs', 'tool-goal', 'tool-skill', 'tool-todo', 'delegation']) {
+      expect(byId.has(id), `${id} must be absent from api-capture-analysis`).toBe(false)
+    }
+  })
 })

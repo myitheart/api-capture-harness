@@ -442,6 +442,34 @@ describe('WorkspaceRuntime', () => {
     expect(clear).toHaveBeenCalledOnce()
   })
 
+  it('inherits the managed cwd and preset when New Session starts from field analysis', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({ items: [{
+      sessionId: sid('analysis-current'),
+      cwd: 'C:/managed/analysis',
+      agentPreset: 'api-capture-analysis',
+      updatedAt: 2,
+      running: false,
+      blank: false,
+    }] as never[] }))
+    await sessions.refresh()
+    sessions.open(sid('analysis-current'))
+    api.onCreate = () => Promise.resolve(ok({
+      sessionId: sid('analysis-new'), agentPreset: 'api-capture-analysis',
+    }))
+
+    workspaces.startSession()
+    await vi.waitFor(() => {
+      expect(api.callsOf('session.create')).toEqual([{
+        cwd: 'C:/managed/analysis', agentPreset: 'api-capture-analysis',
+      }])
+      expect(sessions.list.getSnapshot().current).toBe('analysis-new')
+    })
+  })
+
   it('archives a session, projects the set from the response, list, and frame, and clears only the current one', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()

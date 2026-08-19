@@ -96,6 +96,8 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    * Workspace, then the recent Workspace, or clear into the New Session view.
    */
   startSession: (workspaceId?: WorkspaceId) => void
+  /** Create and open a project-free API Capture analysis Session. */
+  startAnalysisSession: () => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**

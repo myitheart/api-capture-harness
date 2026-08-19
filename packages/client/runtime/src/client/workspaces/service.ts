@@ -176,7 +176,24 @@ export class WorkspaceRuntime implements IWorkspaces {
    */
   startSession(workspaceId?: WorkspaceId): void {
     const workspace = this.list.getSnapshot()
-    const current = this.sessions.list.getSnapshot().current
+    const sessions = this.sessions.list.getSnapshot()
+    const current = sessions.current
+    const currentSummary = current === undefined ? undefined : sessions.byId[current]
+    if (workspaceId === undefined && currentSummary?.agentPreset === 'api-capture-analysis'
+      && currentSummary.cwd !== undefined) {
+      if (currentSummary.blank) {
+        this.sessions.open(currentSummary.id)
+        return
+      }
+      void this.sessions.create({
+        cwd: currentSummary.cwd,
+        agentPreset: 'api-capture-analysis',
+      }).then(
+        (sessionId) => { this.sessions.open(sessionId) },
+        (reason: unknown) => { console.warn('new analysis session failed:', reason) },
+      )
+      return
+    }
     const currentWorkspaceId = current === undefined
       ? undefined
       : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId

@@ -1,0 +1,46 @@
+# The API Capture Assistant analysis preset is intentionally non-coding.
+# It keeps native Harness conversation, evidence reading, image understanding,
+# web search, follow-up questions, and compaction, while omitting every shell,
+# mutation, task, skill, goal, workflow, and delegation surface.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是接口现场助手的业务现场分析 Agent。你的任务是结合用户描述与本机证据包，帮助产品、运营和研发理解页面操作、接口行为、数据含义、异常现象与交付需求。先理解用户真正想解决的问题，再按需读取证据索引、文本、JSON 或截图；不要一次性加载整个证据目录。对不确定的信息明确说明并向用户追问。你可以进行自然对话、证据归纳、请求链路分析、业务规则推断和验收建议，但不得修改任何文件、执行命令或假装已经改动代码。
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+  config:
+    enabledTools:
+      - read
+      - read_image
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000

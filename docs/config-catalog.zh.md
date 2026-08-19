@@ -389,6 +389,24 @@ export type Config = LocalConfig
 
 来源：[`packages/shell/bash-sandbox/src/index.ts:35`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-client-api-capture-draft"></a>
+
+## `@deepseek-ai/dsh-client-api-capture-draft`
+
+```ts config-catalog
+/** Draft bridge deployment options. */
+export interface Config {
+  /** Maximum UTF-8 request body size. */
+  maxBodyBytes: number
+  /** Unclaimed draft lifetime in milliseconds. */
+  draftTtlMs: number
+  /** Managed working directory for project-free analysis sessions. */
+  analysisRoot: string
+}
+```
+
+来源：[`packages/client/api-capture-draft/src/index.ts:12`](../packages/client/api-capture-draft/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`
@@ -722,6 +740,32 @@ export interface Config {
 ```
 
 来源：[`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-codex/src/index.ts)
+
+<a id="deepseek-aidsh-host-api-capture-evidence"></a>
+
+## `@deepseek-ai/dsh-host-api-capture-evidence`
+
+需要：`webServer`
+
+```ts config-catalog
+/** Deployment-owned storage and admission limits. */
+export interface Config {
+  /** Absolute root for staging and completed evidence packages. */
+  root: string
+  /** Maximum total bytes accepted by one evidence package. */
+  maxPackageBytes: number
+  /** Maximum bytes accepted by one declared evidence file. */
+  maxFileBytes: number
+  /** Maximum number of declared files in one evidence package. */
+  maxFiles: number
+  /** Maximum bytes accepted by one package-creation JSON request. */
+  maxMetadataBytes: number
+  /** Age after which incomplete staging transactions can be removed. */
+  stagingTtlMs: number
+}
+```
+
+来源：[`packages/host/api-capture-evidence/src/index.ts:67`](../packages/host/api-capture-evidence/src/index.ts)
 
 <a id="deepseek-aidsh-host-apiproxy"></a>
 
@@ -2383,6 +2427,8 @@ export interface Config {
 ```ts config-catalog
 /** Plugin config (all optional — `Config` supplies the defaults). */
 export interface Config {
+  /** Filesystem tools exposed by this deployment. Defaults to the full suite. */
+  enabledTools?: FsToolName[]
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
   /** Maximum characters returned for a single line before truncation. */
@@ -2392,9 +2438,12 @@ export interface Config {
   /** Files at or above this size stream instead of loading whole into memory. */
   readStreamMinSize?: number
 }
+
+/** Filesystem tools that a deployment may expose to the model. */
+export type FsToolName = 'read' | 'read_image' | 'write' | 'edit'
 ```
 
-来源：[`packages/fs/tool-fs/src/index.ts:25`](../packages/fs/tool-fs/src/index.ts)
+来源：[`packages/fs/tool-fs/src/index.ts:30`](../packages/fs/tool-fs/src/index.ts)
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 

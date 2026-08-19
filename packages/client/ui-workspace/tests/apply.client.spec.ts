@@ -30,17 +30,21 @@ async function bench() {
     value: { items: [{ sessionId: 'session' as never, snippet: 'match' }], hasMore: false },
   }))
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
-  const binding = vi.fn(() => ({ session: { rename: renameSession } }))
+  const command = vi.fn(async () => ({ ok: true, value: { matched: true } }))
+  const binding = vi.fn(() => ({ session: { rename: renameSession, command } }))
+  const createSession = vi.fn(async () => 'analysis-created' as never)
   const fork = vi.fn(async () => 'forked' as never)
   ctx.provide('workspaces', {
     create, startSession, rename, insertSessionBefore,
   } as never)
-  ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
+  ctx.provide('sessions', {
+    open, clear, search, searchResultLimit: 20, binding, fork, create: createSession,
+  } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, startSession, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork,
+    insertSessionBefore, open, clear, search, renameSession, command, binding, fork, createSession,
   }
 }
 
@@ -113,6 +117,28 @@ describe('ui-workspace apply', () => {
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+  })
+
+  it('creates a read-only field-analysis session from the fixed group action', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      cwd: 'C:/managed/analysis', agentPreset: 'api-capture-analysis',
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    try {
+      const b = await bench()
+      declare(b.slots, 'sidebar.workspaces')
+      await b.ctx.plugin({ inject: [...inject], apply }).await()
+      const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
+      browser.startAnalysisSession()
+      await vi.waitFor(() => {
+        expect(b.createSession).toHaveBeenCalledWith({
+          cwd: 'C:/managed/analysis', agentPreset: 'api-capture-analysis',
+        })
+        expect(b.command).toHaveBeenCalledWith('/permission read-only')
+        expect(b.open).toHaveBeenCalledWith('analysis-created')
+      })
+    } finally {
+      fetchMock.mockRestore()
+    }
   })
 
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {

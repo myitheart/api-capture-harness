@@ -97,6 +97,8 @@ function mount(
     summaryOrigin?: 'subagent'
     /** A composer block another plugin raised for this session. */
     composerBlock?: { reason: string }
+    /** Agent preset recorded on the session list summary. */
+    summaryAgentPreset?: string
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
   } = {},
@@ -107,6 +109,7 @@ function mount(
     id: SID, displayTitle: 'Child', parentId: root, cwd: '/projects/one',
     running: false, blank: options.summaryBlank ?? false, updatedAt: 2,
     ...(options.summaryOrigin === undefined ? {} : { origin: options.summaryOrigin }),
+    ...(options.summaryAgentPreset === undefined ? {} : { agentPreset: options.summaryAgentPreset }),
   }
   const listed = options.omitSummaryRow !== true
   const sessions = createSnapshotStore<SessionListState>({
@@ -300,6 +303,20 @@ describe('ConversationRoot resident composer', () => {
     expect(box.placeholder).not.toBe('select a model first')
     const modelSeat = b.seatOwners.filter(call => call.key === 'conversation.input.model').at(-1)?.owner
     expect(modelSeat).toEqual({ locked: true })
+  })
+
+  it('keeps a blank field-analysis session live without registering a Workspace', () => {
+    const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true }), [], undefined, {
+      summaryBlank: true,
+      summaryAgentPreset: 'api-capture-analysis',
+    })
+    const box = b.view.getByRole('textbox') as HTMLTextAreaElement
+    expect(box.disabled).toBe(false)
+    expect(box.readOnly).toBe(false)
+    expect(box.placeholder).toBe('描述你想要构建的内容')
+    expect(b.view.queryByRole('button', { name: '选择工作区' })).toBeNull()
+    expect(b.slotCalls).not.toContain('conversation.hero.workspace')
+    expect(b.slotCalls).toContain('conversation.hero.agentPreset')
   })
 
   it('keeps composer text in the machine, mirrors to the chat store, and submits through the sink', () => {
