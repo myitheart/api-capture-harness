@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import forkMetadata from '../api-capture-fork.json'
 import { resolveApiCaptureTarget } from './api-capture-target.ts'
 
 describe('API Capture portable targets', () => {
+  it('pins the exact upstream source commit without requiring an upstream remote', () => {
+    expect(forkMetadata.upstreamCommit).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   it('keeps Windows x64 output compatible', () => {
     expect(resolveApiCaptureTarget('win32', 'x64')).toEqual({
       platform: 'win32',

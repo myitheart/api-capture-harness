@@ -119,11 +119,17 @@ async function main(): Promise<void> {
   await copyFile(join(root, 'LICENSE'), join(outputRoot, 'LICENSE'))
   await copyFile(join(root, 'THIRD_PARTY_NOTICES.md'), join(outputRoot, 'THIRD_PARTY_NOTICES.md'))
 
-  const [head, upstream, status] = await Promise.all([
+  const forkMetadata = JSON.parse(await readFile(join(root, 'api-capture-fork.json'), 'utf8')) as {
+    upstreamCommit?: unknown
+  }
+  if (typeof forkMetadata.upstreamCommit !== 'string' || !/^[0-9a-f]{40}$/.test(forkMetadata.upstreamCommit)) {
+    throw new Error('api-capture-fork.json must contain a 40-character upstreamCommit')
+  }
+  const [head, status] = await Promise.all([
     run('git', ['rev-parse', 'HEAD']),
-    run('git', ['rev-parse', 'upstream/master']),
     run('git', ['status', '--porcelain', '--untracked-files=all', '--', '.', ':(exclude)dist/**']),
   ])
+  const upstream = forkMetadata.upstreamCommit
   const entry = join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const checksums = await collectChecksums(outputRoot)
   const buildFingerprint = createHash('sha256').update(JSON.stringify({
