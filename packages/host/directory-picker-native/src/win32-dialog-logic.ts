@@ -31,11 +31,13 @@ export interface Win32FolderDialog {
    */
   setTitle(title: string): number
   /**
-   * `IModalWindow::Show` with no owner window; blocks the calling thread
-   * until the user selects or dismisses.
+   * `IModalWindow::Show`; blocks the calling thread until the user selects
+   * or dismisses.
+   * @param owner - the valid foreground window captured immediately before
+   *   showing, or null when Windows has no usable foreground window.
    * @returns the call's HRESULT (`HRESULT_CANCELLED` on dismissal).
    */
-  show(): number
+  show(owner: object | null): number
   /**
    * `IFileDialog::GetResult` + `IShellItem::GetDisplayName(SIGDN_FILESYSPATH)`,
    * releasing the shell item and freeing the COM string.
@@ -79,6 +81,12 @@ export interface Win32DialogBindings {
    * @returns the calling thread's native id.
    */
   currentThreadId(): number
+  /**
+   * Return the current valid foreground window for modal ownership. A null
+   * result deliberately falls back to an unowned dialog instead of failing
+   * directory selection.
+   */
+  foregroundWindow(): object | null
 }
 
 /**
@@ -116,8 +124,9 @@ export function runFolderDialog(
     try {
       check(dialog.setOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR), 'SetOptions')
       check(dialog.setTitle(title), 'SetTitle')
+      const owner = bindings.foregroundWindow()
       onShowing(bindings.currentThreadId())
-      const shown = dialog.show()
+      const shown = dialog.show(owner)
       if (shown === HRESULT_CANCELLED) return null
       check(shown, 'Show')
       const result = dialog.resultPath()

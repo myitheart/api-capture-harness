@@ -99,6 +99,8 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
   const coCreateInstance = ole32.func('__stdcall', 'CoCreateInstance', 'int32', ['void *', 'void *', 'uint32', 'void *', 'void *'])
   const coTaskMemFree = ole32.func('__stdcall', 'CoTaskMemFree', 'void', ['void *'])
   const getCurrentThreadId = kernel32.func('__stdcall', 'GetCurrentThreadId', 'uint32', [])
+  const getForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'void *', [])
+  const isWindow = user32.func('__stdcall', 'IsWindow', 'int', ['void *'])
 
   const protoShow = koffi.proto('int32 __stdcall DshDialogShow(void *self, void *owner)')
   const protoSetOptions = koffi.proto('int32 __stdcall DshDialogSetOptions(void *self, uint32 options)')
@@ -138,6 +140,10 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
       coUninitialize()
     },
     currentThreadId: () => getCurrentThreadId() as number,
+    foregroundWindow: () => {
+      const owner = getForegroundWindow() as object | null
+      return owner !== null && Number(isWindow(owner)) !== 0 ? owner : null
+    },
     createFolderDialog: (): Win32FolderDialog => {
       const out = Buffer.alloc(pointerSize)
       const created = coCreateInstance(CLSID_FILE_OPEN_DIALOG, null, CLSCTX_INPROC_SERVER, IID_IFILE_OPEN_DIALOG, out) as number
@@ -146,7 +152,7 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
       return {
         setOptions: options => method(dialog, SLOT_SET_OPTIONS, protoSetOptions)(options),
         setTitle: title => method(dialog, SLOT_SET_TITLE, protoSetTitle)(title),
-        show: () => method(dialog, SLOT_SHOW, protoShow)(null),
+        show: owner => method(dialog, SLOT_SHOW, protoShow)(owner),
         resultPath: () => {
           const itemOut: unknown[] = [null]
           const gotItem = method(dialog, SLOT_GET_RESULT, protoGetResult)(itemOut)

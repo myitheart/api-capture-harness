@@ -31,8 +31,11 @@ interface ComWorld {
   supportedDpiContexts: number[]
   enumThrows: boolean
   path: string
+  foregroundWindow: object | null
+  foregroundWindowValid: boolean
   titles: string[]
   options: number[]
+  showOwners: unknown[]
   dpiContexts: unknown[]
   freed: unknown[]
   released: string[]
@@ -47,7 +50,8 @@ function comWorld(overrides: Partial<ComWorld> = {}): ComWorld {
     coInitHr: 0, coCreateHr: 0, showHr: 0, getResultHr: 0, getDisplayNameHr: 0,
     hasThreadDpi: true, supportedDpiContexts: [-4], enumThrows: false,
     path: 'C:\\选中\\directory',
-    titles: [], options: [], dpiContexts: [], freed: [], released: [], posted: [],
+    foregroundWindow: { kind: 'foreground-window' }, foregroundWindowValid: true,
+    titles: [], options: [], showOwners: [], dpiContexts: [], freed: [], released: [], posted: [],
     registered: 0, unregistered: 0, uninitialized: 0,
     ...overrides,
   }
@@ -67,7 +71,7 @@ function installFakeKoffi(world: ComWorld): void {
       switch (slot) {
         case 9: world.options.push(args[0] as number); return 0
         case 17: world.titles.push(args[0] as string); return 0
-        case 3: return world.showHr
+        case 3: world.showOwners.push(args[0]); return world.showHr
         case 20: {
           if (world.getResultHr < 0) return world.getResultHr
           ;(args[0] as unknown[])[0] = itemPtr
@@ -106,6 +110,8 @@ function installFakeKoffi(world: ComWorld): void {
             }
             case 'CoTaskMemFree': return (ptr: unknown) => { world.freed.push(ptr) }
             case 'GetCurrentThreadId': return () => 31337
+            case 'GetForegroundWindow': return () => world.foregroundWindow
+            case 'IsWindow': return (hwnd: unknown) => hwnd === world.foregroundWindow && world.foregroundWindowValid ? 1 : 0
             case 'SetThreadDpiAwarenessContext': {
               if (!world.hasThreadDpi) throw new Error(`${dll}: SetThreadDpiAwarenessContext not found`)
               return (context: unknown) => {
@@ -174,10 +180,25 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     expect(world.dpiContexts).toEqual([-4])
     expect(world.titles).toEqual(['选择工作区目录'])
     expect(world.options).toHaveLength(1)
+    expect(world.showOwners).toEqual([world.foregroundWindow])
     expect(showing).toHaveBeenCalledWith(31337)
     expect(world.freed).toHaveLength(1)
     expect(world.released).toEqual(['item', 'dialog'])
     expect(world.uninitialized).toBe(1)
+  })
+
+  it('uses null ownership when Windows reports no valid foreground window', async () => {
+    for (const world of [
+      comWorld({ foregroundWindow: null }),
+      comWorld({ foregroundWindowValid: false }),
+    ]) {
+      installFakeKoffi(world)
+      const bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
+      expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\选中\\directory')
+      expect(world.showOwners).toEqual([null])
+      vi.doUnmock('koffi')
+      vi.resetModules()
+    }
   })
 
   it('maps dismissal and the S_FALSE CoInitializeEx', async () => {
@@ -299,6 +320,7 @@ describe('the worker entry over a mocked process boundary', () => {
         coInitializeSta: () => 0,
         coUninitialize: () => undefined,
         currentThreadId: () => 11,
+        foregroundWindow: () => ({ kind: 'foreground-window' }),
         createFolderDialog: () => ({
           setOptions: () => 0,
           setTitle: () => 0,

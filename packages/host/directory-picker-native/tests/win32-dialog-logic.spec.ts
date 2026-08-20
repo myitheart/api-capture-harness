@@ -15,6 +15,7 @@ const E_FAIL = 0x80004005 | 0
 interface FakeWorld {
   bindings: Win32DialogBindings
   dpi: ReturnType<typeof vi.fn>
+  foreground: ReturnType<typeof vi.fn>
   createDialog: ReturnType<typeof vi.fn>
   uninitialize: ReturnType<typeof vi.fn>
   dialog: {
@@ -27,6 +28,7 @@ interface FakeWorld {
 }
 
 function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorld {
+  const owner = { kind: 'foreground-window' }
   const dialog = {
     setOptions: vi.fn(() => 0),
     setTitle: vi.fn(() => 0),
@@ -36,6 +38,7 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
     ...overrides,
   }
   const dpi = vi.fn()
+  const foreground = vi.fn(() => owner)
   const createDialog = vi.fn(() => dialog)
   const uninitialize = vi.fn()
   const bindings: Win32DialogBindings = {
@@ -44,13 +47,14 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
     coUninitialize: uninitialize,
     createFolderDialog: createDialog,
     currentThreadId: vi.fn(() => 4242),
+    foregroundWindow: foreground,
   }
-  return { bindings, dpi, createDialog, uninitialize, dialog: dialog as FakeWorld['dialog'] }
+  return { bindings, dpi, foreground, createDialog, uninitialize, dialog: dialog as FakeWorld['dialog'] }
 }
 
 describe('runFolderDialog', () => {
   it('sequences DPI, STA, options, title, show, result extraction, and apartment teardown', () => {
-    const { bindings, dpi, dialog, uninitialize } = world()
+    const { bindings, dpi, foreground, dialog, uninitialize } = world()
     const showing = vi.fn()
     expect(runFolderDialog(bindings, 'Pick', showing)).toBe('C:\\picked\\目录')
     expect(dpi).toHaveBeenCalledOnce()
@@ -58,9 +62,18 @@ describe('runFolderDialog', () => {
     expect(dialog.release.mock.invocationCallOrder[0]).toBeLessThan(uninitialize.mock.invocationCallOrder[0] as number)
     expect(dialog.setOptions).toHaveBeenCalledWith(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR)
     expect(dialog.setTitle).toHaveBeenCalledWith('Pick')
+    expect(foreground).toHaveBeenCalledOnce()
     expect(showing).toHaveBeenCalledWith(4242)
     expect(showing.mock.invocationCallOrder[0]).toBeLessThan(dialog.show.mock.invocationCallOrder[0] as number)
+    expect(dialog.show).toHaveBeenCalledWith(foreground.mock.results[0]?.value)
     expect(dialog.release).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to an unowned dialog when no foreground window is available', () => {
+    const { bindings, foreground, dialog } = world()
+    foreground.mockReturnValue(null)
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\picked\\目录')
+    expect(dialog.show).toHaveBeenCalledWith(null)
   })
 
   it('maps the cancelled HRESULT to null and still releases the dialog and apartment', () => {
